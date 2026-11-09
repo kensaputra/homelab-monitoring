@@ -1,0 +1,58 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # The Docker host itself (CPU, memory, disk, network).
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          instance: docker-host
+
+  # Ping (ICMP) checks: switches, access points, routers, printers.
+  # Replace these example addresses with your own devices.
+  - job_name: ping
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    static_configs:
+      - targets: ["192.168.1.1"]
+        labels: { device: router, kind: network }
+      - targets: ["192.168.1.2"]
+        labels: { device: core-switch, kind: network }
+      - targets: ["192.168.1.21"]
+        labels: { device: ap-floor-1, kind: wifi }
+      - targets: ["192.168.1.22"]
+        labels: { device: ap-floor-2, kind: wifi }
+    relabel_configs: &blackbox_relabel
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  # HTTP checks for internal web apps.
+  - job_name: http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets: ["http://grafana:3000/api/health"]
+        labels: { app: grafana }
+      - targets: ["https://example.com"]
+        labels: { app: public-website }
+    relabel_configs: *blackbox_relabel

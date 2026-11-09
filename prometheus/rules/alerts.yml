@@ -1,0 +1,67 @@
+groups:
+  - name: devices
+    rules:
+      - alert: DeviceDown
+        expr: probe_success{job="ping"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.device }} ({{ $labels.instance }}) is not answering ping"
+          description: "No ICMP reply for 2 minutes. Check power, cable and the uplink port."
+
+      - alert: DeviceHighLatency
+        expr: avg_over_time(probe_duration_seconds{job="ping"}[5m]) > 0.1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.device }} ping above 100 ms"
+          description: "Average round trip over 5 minutes is {{ $value | humanizeDuration }}."
+
+  - name: apps
+    rules:
+      - alert: AppDown
+        expr: probe_success{job="http"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.app }} is down"
+          description: "{{ $labels.instance }} has failed its HTTP check for 2 minutes."
+
+      - alert: CertificateExpiresSoon
+        expr: (probe_ssl_earliest_cert_expiry{job="http"} - time()) / 86400 < 14
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "TLS certificate for {{ $labels.app }} expires in {{ $value | humanize }} days"
+
+  - name: host
+    rules:
+      - alert: HostHighCpu
+        expr: 100 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100 > 90
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "CPU on {{ $labels.instance }} above 90% for 10 minutes"
+
+      - alert: HostLowMemory
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Less than 10% memory available on {{ $labels.instance }}"
+
+      - alert: HostDiskAlmostFull
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) < 0.10
+        for: 15m
+        labels: { severity: critical }
+        annotations:
+          summary: "Disk {{ $labels.mountpoint }} on {{ $labels.instance }} is over 90% full"
+
+      - alert: TargetScrapeFailing
+        expr: up == 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Prometheus cannot scrape {{ $labels.job }} ({{ $labels.instance }})"

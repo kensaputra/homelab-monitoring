@@ -1,0 +1,18 @@
+route:
+  receiver: telegram
+  group_by: [alertname, instance]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: telegram
+    webhook_configs:
+      - url: http://alert-bridge:8080/alert
+        send_resolved: true
+
+inhibit_rules:
+  # If a device is fully down, don't also report its latency.
+  - source_matchers: [alertname="DeviceDown"]
+    target_matchers: [alertname="DeviceHighLatency"]
+    equal: [instance]
